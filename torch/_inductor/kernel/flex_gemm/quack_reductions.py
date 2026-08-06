@@ -114,6 +114,7 @@ FLEX_GEMM_POINTWISE_OP_NAMES = frozenset(
         "clamp_max",
         "clamp_min",
         "convert_element_type",
+        "inline_asm_elementwise",
     )
 )
 
@@ -136,6 +137,8 @@ def _cute_arg(value: Any, env: dict[torch.fx.Node, Any]) -> Any:
             int,
             float,
             bool,
+            str,
+            type(None),
             torch.dtype,
             torch.device,
             torch.layout,
@@ -178,6 +181,10 @@ def _cute_call(target: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> An
     op_name = _cute_op_name(target)
     if op_name is None:
         raise NotImplementedError(f"unsupported FlexGEMM epilogue op: {target}")
+    if op_name == "inline_asm_elementwise":
+        # The HOP spells the asm text `asm_str`; the ops handler spells it `asm`.
+        kwargs = dict(kwargs)
+        kwargs["asm"] = kwargs.pop("asm_str")
     try:
         op = getattr(V.get_ops_handler(), op_name)
     except AttributeError:
