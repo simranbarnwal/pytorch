@@ -1842,6 +1842,27 @@ class CommonTemplate:
         angle = torch.tensor([0.0, 1.5708, 3.14159, -0.7854])
         self.common(fn, (abs_, angle))
 
+    def test_polar_empty(self):
+        # Empty inputs used to fail to lower: Inductor collapses the layout of a
+        # 0-element tensor so the last stride becomes 0, and aten.view.dtype
+        # requires stride(-1) == 1.
+        def fn(abs_, angle):
+            return torch.polar(abs_, angle)
+
+        # check_lowp=False: the fp16 GPU rerun yields complex32 while the
+        # float reference stays complex64, which the harness cannot reconcile
+        # (same reason "complex"/"view_as_complex" are f16-xfailed in
+        # test_torchinductor_opinfo.py).
+        for shape in [(0,), (0, 10, 3), (2, 0, 3)]:
+            self.common(fn, (torch.rand(shape), torch.rand(shape)), check_lowp=False)
+
+    def test_polar_scalar(self):
+        # 0-dim inputs exercise the decomposition's reshape/squeeze path.
+        def fn(abs_, angle):
+            return torch.polar(abs_, angle)
+
+        self.common(fn, (torch.tensor(2.0), torch.tensor(1.5708)), check_lowp=False)
+
     def test_add_complex3(self):
         # fix https://github.com/pytorch/pytorch/issues/115071
         @torch.compile
